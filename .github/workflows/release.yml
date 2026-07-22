@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Package portable + installer
+        id: pkg
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          $exe = Get-ChildItem "target/release/*.exe" |
+                 Where-Object { $_.Name -notlike "*setup*" } |
+                 Sort-Object Length -Descending | Select-Object -First 1
+          if (-not $exe) { throw "no release exe found" }
+          Write-Host "portable exe: $($exe.FullName) ($($exe.Length) bytes)"
+
+          $portable = "SwatCrypt_${ver}_x64-portable.exe"
+          Copy-Item $exe.FullName $portable
+
+          $out = Join-Path (Get-Location) "SwatCrypt_${ver}_x64-setup.exe"
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          & $makensis "/DVER=$ver" "/DSRC=$($exe.FullName)" "/DOUT=$out" ".github\installer.nsi"
+          if ($LASTEXITCODE -ne 0) { throw "makensis failed ($LASTEXITCODE)" }
+          if (-not (Test-Path $out)) { throw "installer not produced" }
+          Write-Host "installer: $out"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SwatCrypt_*_x64-portable.exe
+            SwatCrypt_*_x64-setup.exe
