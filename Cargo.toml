@@ -3,7 +3,7 @@ name = "swatcrypt"
 version = "1.0.0"
 edition = "2021"
 authors = ["Swatto"]
-license = "MIT OR Apache-2.0"
+license = "MIT"
 build = "build.rs"
 
 [dependencies]
